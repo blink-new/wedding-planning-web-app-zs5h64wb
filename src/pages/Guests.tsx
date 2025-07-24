@@ -5,13 +5,12 @@ import { ExcelImport } from '../components/ui/ExcelImport'
 
 interface Guest {
   id: string
-  firstName: string
-  lastName?: string
-  phoneNumber: string
+  first_name: string
+  last_name?: string
+  phone_number: string
   email?: string
   notes?: string
-  group?: string
-  createdAt: string
+  created_at: string
 }
 
 export function Guests() {
@@ -24,10 +23,14 @@ export function Guests() {
   const loadGuests = async () => {
     try {
       const user = await blink.auth.me()
+      console.log('Loading guests for user:', user.id)
+      
       const guestsList = await blink.db.guests.list({
-        where: { userId: user.id },
-        orderBy: { createdAt: 'desc' }
+        where: { user_id: user.id },
+        orderBy: { created_at: 'desc' }
       })
+      
+      console.log('Loaded guests:', guestsList)
       setGuests(guestsList)
     } catch (error) {
       console.error('Error loading guests:', error)
@@ -44,18 +47,44 @@ export function Guests() {
     try {
       const user = await blink.auth.me()
       
+      // First, ensure we have an event
+      let eventId = 'default_event'
+      try {
+        const existingEvents = await blink.db.events.list({
+          where: { user_id: user.id },
+          limit: 1
+        })
+        
+        if (existingEvents.length === 0) {
+          // Create default event
+          const newEvent = await blink.db.events.create({
+            id: `event_${user.id}_${Date.now()}`,
+            user_id: user.id,
+            bride_name: 'Bride',
+            groom_name: 'Groom',
+            wedding_date: new Date().toISOString().split('T')[0],
+            venue: 'TBD',
+            created_at: new Date().toISOString()
+          })
+          eventId = newEvent.id
+        } else {
+          eventId = existingEvents[0].id
+        }
+      } catch (eventError) {
+        console.error('Error handling event:', eventError)
+      }
+      
       // Create guests in database
       for (const guest of importedGuests) {
         await blink.db.guests.create({
           id: `guest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-          eventId: 'default',
-          userId: user.id,
-          firstName: guest.firstName,
-          lastName: guest.lastName || undefined,
-          phoneNumber: guest.phoneNumber,
+          event_id: eventId,
+          user_id: user.id,
+          first_name: guest.firstName,
+          last_name: guest.lastName || undefined,
+          phone_number: guest.phoneNumber,
           email: guest.email || undefined,
-          notes: guest.notes || undefined,
-          group: guest.group || undefined
+          notes: guest.notes || undefined
         })
       }
       
@@ -70,9 +99,9 @@ export function Guests() {
   const filteredGuests = guests.filter(guest => {
     const searchTerm = searchQuery.toLowerCase()
     return (
-      guest.firstName.toLowerCase().includes(searchTerm) ||
-      (guest.lastName && guest.lastName.toLowerCase().includes(searchTerm)) ||
-      guest.phoneNumber.includes(searchTerm) ||
+      guest.first_name.toLowerCase().includes(searchTerm) ||
+      (guest.last_name && guest.last_name.toLowerCase().includes(searchTerm)) ||
+      guest.phone_number.includes(searchTerm) ||
       (guest.email && guest.email.toLowerCase().includes(searchTerm))
     )
   })
@@ -161,15 +190,15 @@ export function Guests() {
         </div>
         <div className="bg-white p-6 rounded-xl border border-gray-200">
           <div className="text-2xl font-bold text-wedding-primary">
-            {guests.filter(g => g.phoneNumber).length}
+            {guests.filter(g => g.phone_number).length}
           </div>
           <div className="text-sm text-gray-600">With Phone</div>
         </div>
         <div className="bg-white p-6 rounded-xl border border-gray-200">
           <div className="text-2xl font-bold text-wedding-primary">
-            {guests.filter(g => g.group).length}
+            {guests.filter(g => g.notes).length}
           </div>
-          <div className="text-sm text-gray-600">With Groups</div>
+          <div className="text-sm text-gray-600">With Notes</div>
         </div>
       </div>
 
@@ -183,7 +212,6 @@ export function Guests() {
                   <th className="text-left py-3 px-6 font-medium text-gray-900">Name</th>
                   <th className="text-left py-3 px-6 font-medium text-gray-900">Phone</th>
                   <th className="text-left py-3 px-6 font-medium text-gray-900">Email</th>
-                  <th className="text-left py-3 px-6 font-medium text-gray-900">Group</th>
                   <th className="text-left py-3 px-6 font-medium text-gray-900">Added</th>
                   <th className="text-left py-3 px-6 font-medium text-gray-900">Actions</th>
                 </tr>
@@ -193,7 +221,7 @@ export function Guests() {
                   <tr key={guest.id} className="hover:bg-gray-50">
                     <td className="py-4 px-6">
                       <div className="font-medium text-gray-900">
-                        {guest.firstName} {guest.lastName}
+                        {guest.first_name} {guest.last_name}
                       </div>
                       {guest.notes && (
                         <div className="text-sm text-gray-500 truncate max-w-xs">
@@ -204,7 +232,7 @@ export function Guests() {
                     <td className="py-4 px-6">
                       <div className="flex items-center text-gray-900">
                         <Phone className="w-4 h-4 mr-2 text-gray-400" />
-                        {guest.phoneNumber}
+                        {guest.phone_number}
                       </div>
                     </td>
                     <td className="py-4 px-6">
@@ -217,17 +245,8 @@ export function Guests() {
                         <span className="text-gray-400">No email</span>
                       )}
                     </td>
-                    <td className="py-4 px-6">
-                      {guest.group ? (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-wedding-primary/10 text-wedding-primary">
-                          {guest.group}
-                        </span>
-                      ) : (
-                        <span className="text-gray-400">No group</span>
-                      )}
-                    </td>
                     <td className="py-4 px-6 text-gray-500">
-                      {new Date(guest.createdAt).toLocaleDateString()}
+                      {new Date(guest.created_at).toLocaleDateString()}
                     </td>
                     <td className="py-4 px-6">
                       <button className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
@@ -305,7 +324,6 @@ function AddGuestModal({ onClose, onAdded }: AddGuestModalProps) {
   const [lastName, setLastName] = useState('')
   const [phoneNumber, setPhoneNumber] = useState('')
   const [email, setEmail] = useState('')
-  const [group, setGroup] = useState('')
   const [notes, setNotes] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -316,22 +334,58 @@ function AddGuestModal({ onClose, onAdded }: AddGuestModalProps) {
     setLoading(true)
     try {
       const user = await blink.auth.me()
+      console.log('Creating guest with user:', user.id)
       
-      await blink.db.guests.create({
+      // First, ensure we have an event
+      let eventId = 'default_event'
+      try {
+        const existingEvents = await blink.db.events.list({
+          where: { user_id: user.id },
+          limit: 1
+        })
+        
+        if (existingEvents.length === 0) {
+          // Create default event
+          const newEvent = await blink.db.events.create({
+            id: `event_${user.id}_${Date.now()}`,
+            user_id: user.id,
+            bride_name: 'Bride',
+            groom_name: 'Groom',
+            wedding_date: new Date().toISOString().split('T')[0],
+            venue: 'TBD',
+            created_at: new Date().toISOString()
+          })
+          eventId = newEvent.id
+          console.log('Created default event:', newEvent)
+        } else {
+          eventId = existingEvents[0].id
+          console.log('Using existing event:', eventId)
+        }
+      } catch (eventError) {
+        console.error('Error handling event:', eventError)
+      }
+      
+      const guestData = {
         id: `guest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        eventId: 'default',
-        userId: user.id,
-        firstName: firstName.trim(),
-        lastName: lastName.trim() || undefined,
-        phoneNumber: phoneNumber.trim(),
+        event_id: eventId,
+        user_id: user.id,
+        first_name: firstName.trim(),
+        last_name: lastName.trim() || undefined,
+        phone_number: phoneNumber.trim(),
         email: email.trim() || undefined,
-        group: group.trim() || undefined,
-        notes: notes.trim() || undefined
-      })
+        notes: notes.trim() || undefined,
+        created_at: new Date().toISOString()
+      }
+      
+      console.log('Guest data to create:', guestData)
+      
+      const result = await blink.db.guests.create(guestData)
+      console.log('Guest created successfully:', result)
 
       onAdded()
     } catch (error) {
       console.error('Error adding guest:', error)
+      alert('Error adding guest: ' + error.message)
     } finally {
       setLoading(false)
     }
@@ -395,23 +449,6 @@ function AddGuestModal({ onClose, onAdded }: AddGuestModalProps) {
               onChange={(e) => setEmail(e.target.value)}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-wedding-primary focus:border-transparent"
             />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Group
-            </label>
-            <select
-              value={group}
-              onChange={(e) => setGroup(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-wedding-primary focus:border-transparent"
-            >
-              <option value="">Select a group</option>
-              <option value="All Guests">All Guests</option>
-              <option value="Family">Family</option>
-              <option value="Friends">Friends</option>
-              <option value="Bridal Party">Bridal Party</option>
-            </select>
           </div>
 
           <div>
