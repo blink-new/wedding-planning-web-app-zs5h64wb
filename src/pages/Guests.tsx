@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
-import { Plus, Upload, Search, Filter, Phone, Mail, MoreHorizontal } from 'lucide-react'
+import { Plus, Upload, Search, Filter, Phone, Mail, MoreHorizontal, FileSpreadsheet } from 'lucide-react'
 import { blink } from '../blink/client'
+import { ExcelImport } from '../components/ui/ExcelImport'
 
 interface Guest {
   id: string
@@ -9,6 +10,7 @@ interface Guest {
   phoneNumber: string
   email?: string
   notes?: string
+  group?: string
   createdAt: string
 }
 
@@ -17,6 +19,7 @@ export function Guests() {
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [showAddGuest, setShowAddGuest] = useState(false)
+  const [showExcelImport, setShowExcelImport] = useState(false)
 
   const loadGuests = async () => {
     try {
@@ -36,6 +39,33 @@ export function Guests() {
   useEffect(() => {
     loadGuests()
   }, [])
+
+  const handleExcelImport = async (importedGuests: any[]) => {
+    try {
+      const user = await blink.auth.me()
+      
+      // Create guests in database
+      for (const guest of importedGuests) {
+        await blink.db.guests.create({
+          id: `guest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          eventId: 'default',
+          userId: user.id,
+          firstName: guest.firstName,
+          lastName: guest.lastName || undefined,
+          phoneNumber: guest.phoneNumber,
+          email: guest.email || undefined,
+          notes: guest.notes || undefined,
+          group: guest.group || undefined
+        })
+      }
+      
+      // Reload guests list
+      await loadGuests()
+      setShowExcelImport(false)
+    } catch (error) {
+      console.error('Error importing guests:', error)
+    }
+  }
 
   const filteredGuests = guests.filter(guest => {
     const searchTerm = searchQuery.toLowerCase()
@@ -74,13 +104,16 @@ export function Guests() {
           <p className="text-gray-600">Manage your guest list and contact information</p>
         </div>
         <div className="flex space-x-3">
-          <button className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg font-medium hover:bg-gray-200 transition-colors flex items-center">
-            <Upload className="w-4 h-4 mr-2" />
-            Import CSV
+          <button 
+            onClick={() => setShowExcelImport(true)}
+            className="bg-wedding-primary text-white px-4 py-2 rounded-lg font-medium hover:bg-wedding-primary/90 transition-colors flex items-center"
+          >
+            <FileSpreadsheet className="w-4 h-4 mr-2" />
+            Import Excel
           </button>
           <button
             onClick={() => setShowAddGuest(true)}
-            className="bg-primary text-white px-4 py-2 rounded-lg font-medium hover:bg-primary/90 transition-colors flex items-center"
+            className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg font-medium hover:bg-gray-200 transition-colors flex items-center"
           >
             <Plus className="w-4 h-4 mr-2" />
             Add Guest
@@ -99,13 +132,13 @@ export function Guests() {
                 placeholder="Search guests..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-wedding-primary focus:border-transparent"
               />
             </div>
           </div>
           <div className="flex items-center space-x-2">
             <Filter className="w-5 h-5 text-gray-400" />
-            <select className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-transparent">
+            <select className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-wedding-primary focus:border-transparent">
               <option value="all">All Guests</option>
               <option value="with-email">With Email</option>
               <option value="without-email">Without Email</option>
@@ -115,22 +148,28 @@ export function Guests() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
         <div className="bg-white p-6 rounded-xl border border-gray-200">
-          <div className="text-2xl font-bold text-gray-900">{guests.length}</div>
+          <div className="text-2xl font-bold text-wedding-primary">{guests.length}</div>
           <div className="text-sm text-gray-600">Total Guests</div>
         </div>
         <div className="bg-white p-6 rounded-xl border border-gray-200">
-          <div className="text-2xl font-bold text-gray-900">
+          <div className="text-2xl font-bold text-wedding-primary">
             {guests.filter(g => g.email).length}
           </div>
           <div className="text-sm text-gray-600">With Email</div>
         </div>
         <div className="bg-white p-6 rounded-xl border border-gray-200">
-          <div className="text-2xl font-bold text-gray-900">
+          <div className="text-2xl font-bold text-wedding-primary">
             {guests.filter(g => g.phoneNumber).length}
           </div>
           <div className="text-sm text-gray-600">With Phone</div>
+        </div>
+        <div className="bg-white p-6 rounded-xl border border-gray-200">
+          <div className="text-2xl font-bold text-wedding-primary">
+            {guests.filter(g => g.group).length}
+          </div>
+          <div className="text-sm text-gray-600">With Groups</div>
         </div>
       </div>
 
@@ -144,6 +183,7 @@ export function Guests() {
                   <th className="text-left py-3 px-6 font-medium text-gray-900">Name</th>
                   <th className="text-left py-3 px-6 font-medium text-gray-900">Phone</th>
                   <th className="text-left py-3 px-6 font-medium text-gray-900">Email</th>
+                  <th className="text-left py-3 px-6 font-medium text-gray-900">Group</th>
                   <th className="text-left py-3 px-6 font-medium text-gray-900">Added</th>
                   <th className="text-left py-3 px-6 font-medium text-gray-900">Actions</th>
                 </tr>
@@ -177,6 +217,15 @@ export function Guests() {
                         <span className="text-gray-400">No email</span>
                       )}
                     </td>
+                    <td className="py-4 px-6">
+                      {guest.group ? (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-wedding-primary/10 text-wedding-primary">
+                          {guest.group}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400">No group</span>
+                      )}
+                    </td>
                     <td className="py-4 px-6 text-gray-500">
                       {new Date(guest.createdAt).toLocaleDateString()}
                     </td>
@@ -193,26 +242,43 @@ export function Guests() {
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
-          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Plus className="w-8 h-8 text-gray-400" />
+          <div className="w-16 h-16 bg-wedding-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+            <FileSpreadsheet className="w-8 h-8 text-wedding-primary" />
           </div>
           <h3 className="text-lg font-semibold text-gray-900 mb-2">No guests found</h3>
           <p className="text-gray-600 mb-6">
             {searchQuery 
               ? 'Try adjusting your search criteria'
-              : 'Get started by adding your first guest or importing from CSV'
+              : 'Get started by importing your guest list from Excel or adding guests individually'
             }
           </p>
           {!searchQuery && (
-            <button
-              onClick={() => setShowAddGuest(true)}
-              className="bg-primary text-white px-6 py-3 rounded-lg font-medium hover:bg-primary/90 transition-colors"
-            >
-              Add Your First Guest
-            </button>
+            <div className="flex justify-center space-x-3">
+              <button
+                onClick={() => setShowExcelImport(true)}
+                className="bg-wedding-primary text-white px-6 py-3 rounded-lg font-medium hover:bg-wedding-primary/90 transition-colors flex items-center"
+              >
+                <FileSpreadsheet className="w-4 h-4 mr-2" />
+                Import from Excel
+              </button>
+              <button
+                onClick={() => setShowAddGuest(true)}
+                className="bg-gray-100 text-gray-700 px-6 py-3 rounded-lg font-medium hover:bg-gray-200 transition-colors flex items-center"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Add Manually
+              </button>
+            </div>
           )}
         </div>
       )}
+
+      {/* Excel Import Modal */}
+      <ExcelImport
+        isOpen={showExcelImport}
+        onClose={() => setShowExcelImport(false)}
+        onImport={handleExcelImport}
+      />
 
       {/* Add Guest Modal */}
       {showAddGuest && (
@@ -239,6 +305,7 @@ function AddGuestModal({ onClose, onAdded }: AddGuestModalProps) {
   const [lastName, setLastName] = useState('')
   const [phoneNumber, setPhoneNumber] = useState('')
   const [email, setEmail] = useState('')
+  const [group, setGroup] = useState('')
   const [notes, setNotes] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -251,13 +318,14 @@ function AddGuestModal({ onClose, onAdded }: AddGuestModalProps) {
       const user = await blink.auth.me()
       
       await blink.db.guests.create({
-        id: `guest_${Date.now()}`,
-        eventId: 'default', // You'd get this from context
+        id: `guest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        eventId: 'default',
         userId: user.id,
         firstName: firstName.trim(),
         lastName: lastName.trim() || undefined,
         phoneNumber: phoneNumber.trim(),
         email: email.trim() || undefined,
+        group: group.trim() || undefined,
         notes: notes.trim() || undefined
       })
 
@@ -286,7 +354,7 @@ function AddGuestModal({ onClose, onAdded }: AddGuestModalProps) {
                 type="text"
                 value={firstName}
                 onChange={(e) => setFirstName(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-transparent"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-wedding-primary focus:border-transparent"
                 required
               />
             </div>
@@ -298,7 +366,7 @@ function AddGuestModal({ onClose, onAdded }: AddGuestModalProps) {
                 type="text"
                 value={lastName}
                 onChange={(e) => setLastName(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-transparent"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-wedding-primary focus:border-transparent"
               />
             </div>
           </div>
@@ -312,7 +380,7 @@ function AddGuestModal({ onClose, onAdded }: AddGuestModalProps) {
               value={phoneNumber}
               onChange={(e) => setPhoneNumber(e.target.value)}
               placeholder="+1 (555) 123-4567"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-transparent"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-wedding-primary focus:border-transparent"
               required
             />
           </div>
@@ -325,8 +393,25 @@ function AddGuestModal({ onClose, onAdded }: AddGuestModalProps) {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-transparent"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-wedding-primary focus:border-transparent"
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Group
+            </label>
+            <select
+              value={group}
+              onChange={(e) => setGroup(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-wedding-primary focus:border-transparent"
+            >
+              <option value="">Select a group</option>
+              <option value="All Guests">All Guests</option>
+              <option value="Family">Family</option>
+              <option value="Friends">Friends</option>
+              <option value="Bridal Party">Bridal Party</option>
+            </select>
           </div>
 
           <div>
@@ -337,7 +422,7 @@ function AddGuestModal({ onClose, onAdded }: AddGuestModalProps) {
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={3}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-transparent resize-none"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-wedding-primary focus:border-transparent resize-none"
             />
           </div>
 
@@ -352,7 +437,7 @@ function AddGuestModal({ onClose, onAdded }: AddGuestModalProps) {
             <button
               type="submit"
               disabled={!firstName.trim() || !phoneNumber.trim() || loading}
-              className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+              className="px-4 py-2 bg-wedding-primary text-white rounded-lg hover:bg-wedding-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
             >
               {loading ? (
                 <>
