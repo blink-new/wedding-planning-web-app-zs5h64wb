@@ -3,33 +3,19 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { CalendarIcon, Heart, Users, MapPin, Camera, MessageCircle, CheckCircle } from 'lucide-react'
+import { CalendarIcon, Heart, MapPin, Upload, CheckCircle, FileSpreadsheet, AlertCircle } from 'lucide-react'
 import { format } from 'date-fns'
 import { cn } from '@/lib/utils'
 import { blink } from '@/blink/client'
 
 interface OnboardingData {
-  // Step 1: Wedding Basics
   brideName: string
   groomName: string
   weddingDate: Date | undefined
   venue: string
-  budget: string
-  
-  // Step 2: Wedding Style & Preferences
-  weddingStyle: string
-  guestCount: string
-  ceremony: string
-  reception: string
-  
-  // Step 3: Planning Priorities
-  priorities: string[]
-  timeline: string
-  notes: string
+  guestListFile: File | null
 }
 
 interface OnboardingFlowProps {
@@ -53,7 +39,7 @@ const WelcomeStep: React.FC<any> = ({ onNext }) => {
         </p>
         <div className="grid grid-cols-3 gap-4 mt-8">
           <div className="text-center">
-            <Users className="w-8 h-8 text-wedding-primary mx-auto mb-2" />
+            <FileSpreadsheet className="w-8 h-8 text-wedding-primary mx-auto mb-2" />
             <p className="text-sm text-gray-600">Guest Management</p>
           </div>
           <div className="text-center">
@@ -61,7 +47,7 @@ const WelcomeStep: React.FC<any> = ({ onNext }) => {
             <p className="text-sm text-gray-600">Venue Planning</p>
           </div>
           <div className="text-center">
-            <MessageCircle className="w-8 h-8 text-wedding-primary mx-auto mb-2" />
+            <CheckCircle className="w-8 h-8 text-wedding-primary mx-auto mb-2" />
             <p className="text-sm text-gray-600">RSVP Tracking</p>
           </div>
         </div>
@@ -138,7 +124,7 @@ const BasicsStep: React.FC<any> = ({ data, updateData, onNext, onPrev }) => {
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="venue">Venue (Optional)</Label>
+        <Label htmlFor="venue">Wedding Location *</Label>
         <Input
           id="venue"
           value={data.venue}
@@ -148,22 +134,163 @@ const BasicsStep: React.FC<any> = ({ data, updateData, onNext, onPrev }) => {
         />
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="budget">Estimated Budget (Optional)</Label>
-        <Select value={data.budget} onValueChange={(value) => updateData({ budget: value })}>
-          <SelectTrigger className="border-gray-300 focus:border-wedding-primary">
-            <SelectValue placeholder="Select your budget range" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="5000">Under $5,000</SelectItem>
-            <SelectItem value="10000">$5,000 - $10,000</SelectItem>
-            <SelectItem value="20000">$10,000 - $20,000</SelectItem>
-            <SelectItem value="35000">$20,000 - $35,000</SelectItem>
-            <SelectItem value="50000">$35,000 - $50,000</SelectItem>
-            <SelectItem value="75000">$50,000 - $75,000</SelectItem>
-            <SelectItem value="100000">$75,000+</SelectItem>
-          </SelectContent>
-        </Select>
+      <div className="flex gap-3 pt-4">
+        <Button variant="outline" onClick={onPrev} className="flex-1">
+          Back
+        </Button>
+        <Button 
+          onClick={handleNext} 
+          className="flex-1 bg-wedding-primary hover:bg-wedding-primary/90"
+          disabled={!data.brideName || !data.groomName || !data.weddingDate || !data.venue}
+        >
+          Continue
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+// Guest List Upload Step Component
+const GuestListStep: React.FC<any> = ({ data, updateData, onNext, onPrev }) => {
+  const [dragActive, setDragActive] = useState(false)
+  const [fileError, setFileError] = useState('')
+
+  const handleFileChange = (file: File | null) => {
+    setFileError('')
+    
+    if (file) {
+      // Check file type
+      const validTypes = [
+        'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'text/csv'
+      ]
+      
+      if (!validTypes.includes(file.type) && !file.name.endsWith('.xlsx') && !file.name.endsWith('.xls') && !file.name.endsWith('.csv')) {
+        setFileError('Please upload an Excel file (.xlsx, .xls) or CSV file')
+        return
+      }
+      
+      // Check file size (max 10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        setFileError('File size must be less than 10MB')
+        return
+      }
+      
+      updateData({ guestListFile: file })
+    }
+  }
+
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive(true)
+    } else if (e.type === "dragleave") {
+      setDragActive(false)
+    }
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setDragActive(false)
+    
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      handleFileChange(e.dataTransfer.files[0])
+    }
+  }
+
+  const handleNext = () => {
+    if (data.guestListFile) {
+      onNext()
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="space-y-4">
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-start space-x-3">
+            <AlertCircle className="w-5 h-5 text-blue-600 mt-0.5" />
+            <div className="text-sm text-blue-800">
+              <p className="font-semibold mb-2">Required Excel/CSV Format:</p>
+              <ul className="space-y-1 text-xs">
+                <li>• <strong>Name</strong> (required) - Full name of guest</li>
+                <li>• <strong>Phone</strong> (required) - Cell phone number for RSVP</li>
+                <li>• <strong>Email</strong> (optional) - Email address</li>
+                <li>• <strong>Group</strong> (optional) - Family, Friends, Work, etc.</li>
+                <li>• <strong>Plus One</strong> (optional) - Yes/No or True/False</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Upload Guest List *</Label>
+          <div
+            className={cn(
+              "border-2 border-dashed rounded-lg p-8 text-center transition-colors",
+              dragActive ? "border-wedding-primary bg-wedding-primary/5" : "border-gray-300",
+              data.guestListFile ? "border-green-500 bg-green-50" : ""
+            )}
+            onDragEnter={handleDrag}
+            onDragLeave={handleDrag}
+            onDragOver={handleDrag}
+            onDrop={handleDrop}
+          >
+            {data.guestListFile ? (
+              <div className="space-y-2">
+                <CheckCircle className="w-12 h-12 text-green-600 mx-auto" />
+                <p className="text-green-800 font-semibold">{data.guestListFile.name}</p>
+                <p className="text-sm text-green-600">
+                  {(data.guestListFile.size / 1024).toFixed(1)} KB
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => updateData({ guestListFile: null })}
+                  className="mt-2"
+                >
+                  Remove File
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <Upload className="w-12 h-12 text-gray-400 mx-auto" />
+                <div>
+                  <p className="text-lg font-semibold text-gray-700">
+                    Drop your Excel file here
+                  </p>
+                  <p className="text-sm text-gray-500 mt-1">
+                    or click to browse files
+                  </p>
+                </div>
+                <input
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  onChange={(e) => handleFileChange(e.target.files?.[0] || null)}
+                  className="hidden"
+                  id="file-upload"
+                />
+                <Button
+                  variant="outline"
+                  onClick={() => document.getElementById('file-upload')?.click()}
+                  className="border-wedding-primary text-wedding-primary hover:bg-wedding-primary/10"
+                >
+                  <FileSpreadsheet className="w-4 h-4 mr-2" />
+                  Choose File
+                </Button>
+              </div>
+            )}
+          </div>
+          {fileError && (
+            <p className="text-sm text-red-600 flex items-center">
+              <AlertCircle className="w-4 h-4 mr-1" />
+              {fileError}
+            </p>
+          )}
+        </div>
       </div>
 
       <div className="flex gap-3 pt-4">
@@ -173,182 +300,8 @@ const BasicsStep: React.FC<any> = ({ data, updateData, onNext, onPrev }) => {
         <Button 
           onClick={handleNext} 
           className="flex-1 bg-wedding-primary hover:bg-wedding-primary/90"
-          disabled={!data.brideName || !data.groomName || !data.weddingDate}
+          disabled={!data.guestListFile}
         >
-          Continue
-        </Button>
-      </div>
-    </div>
-  )
-}
-
-// Style Step Component
-const StyleStep: React.FC<any> = ({ data, updateData, onNext, onPrev }) => {
-  const weddingStyles = [
-    'Classic & Traditional',
-    'Modern & Contemporary',
-    'Rustic & Country',
-    'Beach & Destination',
-    'Garden & Outdoor',
-    'Vintage & Retro',
-    'Bohemian & Free-spirited',
-    'Glamorous & Luxurious'
-  ]
-
-  const handleNext = () => {
-    onNext()
-  }
-
-  return (
-    <div className="space-y-6">
-      <div className="space-y-2">
-        <Label>Wedding Style</Label>
-        <Select value={data.weddingStyle} onValueChange={(value) => updateData({ weddingStyle: value })}>
-          <SelectTrigger className="border-gray-300 focus:border-wedding-primary">
-            <SelectValue placeholder="Choose your wedding style" />
-          </SelectTrigger>
-          <SelectContent>
-            {weddingStyles.map((style) => (
-              <SelectItem key={style} value={style}>{style}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="space-y-2">
-        <Label>Expected Guest Count</Label>
-        <Select value={data.guestCount} onValueChange={(value) => updateData({ guestCount: value })}>
-          <SelectTrigger className="border-gray-300 focus:border-wedding-primary">
-            <SelectValue placeholder="How many guests?" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="25">Intimate (Under 25)</SelectItem>
-            <SelectItem value="50">Small (25-50)</SelectItem>
-            <SelectItem value="100">Medium (50-100)</SelectItem>
-            <SelectItem value="150">Large (100-150)</SelectItem>
-            <SelectItem value="200">Very Large (150+)</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="ceremony">Ceremony Location (Optional)</Label>
-        <Input
-          id="ceremony"
-          value={data.ceremony}
-          onChange={(e) => updateData({ ceremony: e.target.value })}
-          placeholder="Where will the ceremony take place?"
-          className="border-gray-300 focus:border-wedding-primary"
-        />
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="reception">Reception Location (Optional)</Label>
-        <Input
-          id="reception"
-          value={data.reception}
-          onChange={(e) => updateData({ reception: e.target.value })}
-          placeholder="Where will the reception be held?"
-          className="border-gray-300 focus:border-wedding-primary"
-        />
-      </div>
-
-      <div className="flex gap-3 pt-4">
-        <Button variant="outline" onClick={onPrev} className="flex-1">
-          Back
-        </Button>
-        <Button onClick={handleNext} className="flex-1 bg-wedding-primary hover:bg-wedding-primary/90">
-          Continue
-        </Button>
-      </div>
-    </div>
-  )
-}
-
-// Priorities Step Component
-const PrioritiesStep: React.FC<any> = ({ data, updateData, onNext, onPrev }) => {
-  const priorityOptions = [
-    'Photography & Videography',
-    'Venue & Catering',
-    'Music & Entertainment',
-    'Flowers & Decorations',
-    'Wedding Dress & Attire',
-    'Guest Experience',
-    'Honeymoon Planning',
-    'Budget Management'
-  ]
-
-  const togglePriority = (priority: string) => {
-    const currentPriorities = data.priorities || []
-    const updated = currentPriorities.includes(priority)
-      ? currentPriorities.filter((p: string) => p !== priority)
-      : [...currentPriorities, priority]
-    updateData({ priorities: updated })
-  }
-
-  const handleNext = () => {
-    onNext()
-  }
-
-  return (
-    <div className="space-y-6">
-      <div className="space-y-2">
-        <Label>What are your top planning priorities? (Select all that apply)</Label>
-        <div className="grid grid-cols-2 gap-3">
-          {priorityOptions.map((priority) => (
-            <button
-              key={priority}
-              onClick={() => togglePriority(priority)}
-              className={cn(
-                "p-3 text-left rounded-lg border-2 transition-all duration-200",
-                data.priorities?.includes(priority)
-                  ? "border-wedding-primary bg-wedding-primary/10 text-wedding-primary"
-                  : "border-gray-200 hover:border-gray-300"
-              )}
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">{priority}</span>
-                {data.priorities?.includes(priority) && (
-                  <CheckCircle className="w-4 h-4 text-wedding-primary" />
-                )}
-              </div>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        <Label>Planning Timeline</Label>
-        <Select value={data.timeline} onValueChange={(value) => updateData({ timeline: value })}>
-          <SelectTrigger className="border-gray-300 focus:border-wedding-primary">
-            <SelectValue placeholder="How much time do you have?" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="3months">3 months or less</SelectItem>
-            <SelectItem value="6months">3-6 months</SelectItem>
-            <SelectItem value="12months">6-12 months</SelectItem>
-            <SelectItem value="18months">12-18 months</SelectItem>
-            <SelectItem value="24months">18+ months</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="notes">Additional Notes (Optional)</Label>
-        <Textarea
-          id="notes"
-          value={data.notes}
-          onChange={(e) => updateData({ notes: e.target.value })}
-          placeholder="Any special requests, themes, or important details..."
-          className="border-gray-300 focus:border-wedding-primary min-h-[100px]"
-        />
-      </div>
-
-      <div className="flex gap-3 pt-4">
-        <Button variant="outline" onClick={onPrev} className="flex-1">
-          Back
-        </Button>
-        <Button onClick={handleNext} className="flex-1 bg-wedding-primary hover:bg-wedding-primary/90">
           Continue
         </Button>
       </div>
@@ -375,9 +328,8 @@ const CompletionStep: React.FC<any> = ({ data, onComplete }) => {
           <h4 className="font-semibold text-gray-800 mb-2">Your Wedding Summary:</h4>
           <div className="text-sm text-gray-600 space-y-1">
             <p><strong>Date:</strong> {data.weddingDate ? format(data.weddingDate, "PPP") : 'Not set'}</p>
-            <p><strong>Style:</strong> {data.weddingStyle || 'Not specified'}</p>
-            <p><strong>Guests:</strong> {data.guestCount || 'Not specified'}</p>
-            <p><strong>Priorities:</strong> {data.priorities?.length ? data.priorities.join(', ') : 'None selected'}</p>
+            <p><strong>Location:</strong> {data.venue || 'Not specified'}</p>
+            <p><strong>Guest List:</strong> {data.guestListFile ? `${data.guestListFile.name} uploaded` : 'Not uploaded'}</p>
           </div>
         </div>
       </div>
@@ -395,14 +347,7 @@ const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ onComplete }) => {
     groomName: '',
     weddingDate: undefined,
     venue: '',
-    budget: '',
-    weddingStyle: '',
-    guestCount: '',
-    ceremony: '',
-    reception: '',
-    priorities: [],
-    timeline: '',
-    notes: ''
+    guestListFile: null
   })
 
   const steps = [
@@ -419,16 +364,10 @@ const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ onComplete }) => {
       component: BasicsStep
     },
     {
-      title: 'Style & Preferences',
-      description: 'What\'s your wedding vision?',
-      icon: Camera,
-      component: StyleStep
-    },
-    {
-      title: 'Planning Priorities',
-      description: 'What matters most to you?',
-      icon: CheckCircle,
-      component: PrioritiesStep
+      title: 'Guest List Upload',
+      description: 'Upload your guest list with phone numbers',
+      icon: FileSpreadsheet,
+      component: GuestListStep
     },
     {
       title: 'All Set!',
@@ -462,16 +401,11 @@ const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ onComplete }) => {
         groom_name: data.groomName,
         wedding_date: data.weddingDate?.toISOString(),
         venue: data.venue,
-        budget: parseFloat(data.budget) || 0,
-        wedding_style: data.weddingStyle,
-        guest_count: parseInt(data.guestCount) || 0,
-        ceremony_location: data.ceremony,
-        reception_location: data.reception,
-        priorities: data.priorities.join(','),
-        timeline: data.timeline,
-        notes: data.notes,
         created_at: new Date().toISOString()
       })
+
+      // TODO: Process guest list file and save guests to database
+      // This would involve parsing the Excel/CSV file and creating guest records
 
       onComplete(data)
     } catch (error) {
