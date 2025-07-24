@@ -14,7 +14,6 @@ interface Guest {
   phoneNumber: string
   email?: string
   group?: string
-  notes?: string
 }
 
 interface ValidationError {
@@ -79,14 +78,16 @@ export function ExcelImport({ isOpen, onClose, onImport }: ExcelImportProps) {
       }
 
       const headers = jsonData[0].map(h => h?.toLowerCase().trim())
-      const requiredFields = ['first name', 'last name', 'phone number']
-      const missingFields = requiredFields.filter(field => !headers.includes(field))
-
-      if (missingFields.length > 0) {
+      const expectedHeaders = ['first name', 'last name', 'phone number', 'email', 'group']
+      
+      // Check if headers match our template exactly
+      const headersMatch = expectedHeaders.every((header, index) => headers[index] === header) && headers.length === expectedHeaders.length
+      
+      if (!headersMatch) {
         setErrors([{ 
           row: 0, 
           field: 'headers', 
-          message: `Missing required columns: ${missingFields.join(', ')}. Required: First Name, Last Name, Phone Number`, 
+          message: `Please use our Excel template. Expected columns: ${expectedHeaders.map(h => h.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')).join(', ')}`, 
           value: headers.join(', ') 
         }])
         setIsProcessing(false)
@@ -105,8 +106,7 @@ export function ExcelImport({ isOpen, onClose, onImport }: ExcelImportProps) {
           lastName: '',
           phoneNumber: '',
           email: '',
-          group: '',
-          notes: ''
+          group: ''
         }
 
         // Map data based on headers
@@ -135,10 +135,6 @@ export function ExcelImport({ isOpen, onClose, onImport }: ExcelImportProps) {
             case 'group':
             case 'category':
               guest.group = value
-              break
-            case 'notes':
-            case 'comments':
-              guest.notes = value
               break
           }
         })
@@ -194,10 +190,10 @@ export function ExcelImport({ isOpen, onClose, onImport }: ExcelImportProps) {
 
   const downloadTemplate = () => {
     const templateData = [
-      ['First Name', 'Last Name', 'Phone Number', 'Email', 'Group', 'Notes'],
-      ['John', 'Doe', '(555) 123-4567', 'john@example.com', 'Family', 'Bride\'s cousin'],
-      ['Jane', 'Smith', '555-987-6543', 'jane@example.com', 'Friends', 'College roommate'],
-      ['Bob', 'Johnson', '+1-555-555-5555', 'bob@example.com', 'Bridal Party', 'Best man']
+      ['First Name', 'Last Name', 'Phone Number', 'Email', 'Group'],
+      ['John', 'Doe', '(555) 123-4567', 'john@example.com', 'Family'],
+      ['Jane', 'Smith', '555-987-6543', 'jane@example.com', 'Friends'],
+      ['Bob', 'Johnson', '+1-555-555-5555', 'bob@example.com', 'Bridal Party']
     ]
 
     const ws = XLSX.utils.aoa_to_sheet(templateData)
@@ -227,7 +223,7 @@ export function ExcelImport({ isOpen, onClose, onImport }: ExcelImportProps) {
             Import Guest List from Excel
           </DialogTitle>
           <DialogDescription>
-            Upload an Excel file with your guest list. Required columns: First Name, Last Name, Phone Number
+            Upload an Excel file using our required template. All columns must match exactly.
           </DialogDescription>
         </DialogHeader>
 
@@ -236,9 +232,9 @@ export function ExcelImport({ isOpen, onClose, onImport }: ExcelImportProps) {
             {/* Template Download */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-sm">Need a template?</CardTitle>
+                <CardTitle className="text-sm">Required Template</CardTitle>
                 <CardDescription>
-                  Download our Excel template with the correct format and example data
+                  You must use our Excel template. Download it below and fill in your guest data.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -263,7 +259,7 @@ export function ExcelImport({ isOpen, onClose, onImport }: ExcelImportProps) {
                   <Upload className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                   <h3 className="text-lg font-medium mb-2">Upload Excel File</h3>
                   <p className="text-gray-500 mb-4">
-                    Select an Excel file (.xlsx or .xls) with your guest list
+                    Select an Excel file (.xlsx or .xls) using our required template format
                   </p>
                   <Button 
                     onClick={() => fileInputRef.current?.click()}
@@ -279,8 +275,8 @@ export function ExcelImport({ isOpen, onClose, onImport }: ExcelImportProps) {
             <Alert>
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
-                <strong>Required columns:</strong> First Name, Last Name, Phone Number<br />
-                <strong>Optional columns:</strong> Email, Group, Notes<br />
+                <strong>Template Required:</strong> You must use our Excel template with exact column headers<br />
+                <strong>Columns:</strong> First Name, Last Name, Phone Number, Email, Group<br />
                 <strong>Phone format:</strong> Any format is accepted (e.g., (555) 123-4567, 555-123-4567, +1-555-123-4567)
               </AlertDescription>
             </Alert>
