@@ -46,26 +46,33 @@ export function Groups() {
 
   const createDefaultGroups = async (userId: string) => {
     try {
+      console.log('createDefaultGroups called for user:', userId)
       // First, ensure we have a default event
       let defaultEvent
       try {
+        console.log('Checking for existing events...')
         const existingEvents = await blink.db.events.list({
-          where: { userId: userId },
+          where: { user_id: userId },
           limit: 1
         })
+        console.log('Existing events:', existingEvents)
         
         if (existingEvents.length === 0) {
+          console.log('No events found, creating default event...')
           // Create a default event
           defaultEvent = await blink.db.events.create({
             id: `event_${userId}_default`,
-            userId: userId,
-            brideName: 'Bride',
-            groomName: 'Groom',
-            weddingDate: new Date().toISOString().split('T')[0],
-            venue: 'Wedding Venue'
+            user_id: userId,
+            bride_name: 'Bride',
+            groom_name: 'Groom',
+            wedding_date: new Date().toISOString().split('T')[0],
+            venue: 'Wedding Venue',
+            created_at: new Date().toISOString()
           })
+          console.log('Created default event:', defaultEvent)
         } else {
           defaultEvent = existingEvents[0]
+          console.log('Using existing event:', defaultEvent)
         }
       } catch (error) {
         console.error('Error with events:', error)
@@ -73,28 +80,38 @@ export function Groups() {
       }
 
       // Now create default groups
+      console.log('Creating default groups for event:', defaultEvent.id)
       for (const defaultGroup of defaultGroups) {
         const groupId = `group_${userId}_${defaultGroup.name.toLowerCase().replace(/\s+/g, '_')}`
+        console.log(`Processing group: ${defaultGroup.name} with ID: ${groupId}`)
         
         // Check if group already exists
-        const existingGroups = await blink.db.guestGroups.list({
+        const existingGroups = await blink.db.guest_groups.list({
           where: { 
-            userId: userId,
+            user_id: userId,
             name: defaultGroup.name
           }
         })
+        console.log(`Existing ${defaultGroup.name} groups:`, existingGroups)
         
         if (existingGroups.length === 0) {
-          await blink.db.guestGroups.create({
+          console.log(`Creating group: ${defaultGroup.name}`)
+          const newGroup = await blink.db.guest_groups.create({
             id: groupId,
-            eventId: defaultEvent.id,
-            userId: userId,
+            event_id: defaultEvent.id,
+            user_id: userId,
             name: defaultGroup.name,
             description: defaultGroup.description,
-            color: defaultGroup.color
+            color: defaultGroup.color,
+            is_default: true,
+            created_at: new Date().toISOString()
           })
+          console.log(`Created group:`, newGroup)
+        } else {
+          console.log(`Group ${defaultGroup.name} already exists`)
         }
       }
+      console.log('Finished creating default groups')
     } catch (error) {
       console.error('Error creating default groups:', error)
     }
@@ -102,15 +119,20 @@ export function Groups() {
 
   const loadGroups = useCallback(async () => {
     try {
+      console.log('Loading groups...')
       const user = await blink.auth.me()
+      console.log('Current user:', user)
       
       // Create default groups if they don't exist
+      console.log('Creating default groups...')
       await createDefaultGroups(user.id)
       
-      const groupsList = await blink.db.guestGroups.list({
-        where: { userId: user.id },
-        orderBy: { createdAt: 'desc' }
+      console.log('Fetching groups from database...')
+      const groupsList = await blink.db.guest_groups.list({
+        where: { user_id: user.id },
+        orderBy: { created_at: 'desc' }
       })
+      console.log('Groups from database:', groupsList)
       
       // Mark default groups and add member counts
       const groupsWithMetadata = groupsList.map(group => ({
@@ -126,6 +148,7 @@ export function Groups() {
         return 0
       })
       
+      console.log('Final sorted groups:', sortedGroups)
       setGroups(sortedGroups)
     } catch (error) {
       console.error('Error loading groups:', error)
@@ -340,7 +363,7 @@ function CreateGroupModal({ onClose, onCreated }: CreateGroupModalProps) {
       
       // Get the user's event
       const existingEvents = await blink.db.events.list({
-        where: { userId: user.id },
+        where: { user_id: user.id },
         limit: 1
       })
       
@@ -349,13 +372,15 @@ function CreateGroupModal({ onClose, onCreated }: CreateGroupModalProps) {
         eventId = existingEvents[0].id
       }
       
-      await blink.db.guestGroups.create({
+      await blink.db.guest_groups.create({
         id: `group_${Date.now()}`,
-        eventId: eventId,
-        userId: user.id,
+        event_id: eventId,
+        user_id: user.id,
         name: name.trim(),
         description: description.trim() || undefined,
-        color
+        color,
+        is_default: false,
+        created_at: new Date().toISOString()
       })
 
       onCreated()
