@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react'
-import { Plus, Users, Edit, Trash2 } from 'lucide-react'
+import React, { useState, useEffect, useCallback } from 'react'
+import { Plus, Users, Edit, Trash2, Crown, Heart, UserCheck, UsersRound } from 'lucide-react'
 import { blink } from '../blink/client'
 
 interface Group {
@@ -8,39 +8,121 @@ interface Group {
   description?: string
   color: string
   createdAt: string
+  memberCount?: number
+  isDefault?: boolean
 }
+
+const defaultGroups = [
+  {
+    name: 'All Guests',
+    description: 'Everyone invited to your wedding',
+    color: '#019592',
+    icon: UsersRound
+  },
+  {
+    name: 'Family',
+    description: 'Close family members from both sides',
+    color: '#8B5A3C',
+    icon: Heart
+  },
+  {
+    name: 'Friends',
+    description: 'Close friends and college buddies',
+    color: '#D4AF37',
+    icon: Users
+  },
+  {
+    name: 'Bridal Party',
+    description: 'Bridesmaids, groomsmen, and wedding party',
+    color: '#E91E63',
+    icon: Crown
+  }
+]
 
 export function Groups() {
   const [groups, setGroups] = useState<Group[]>([])
   const [loading, setLoading] = useState(true)
   const [showCreateGroup, setShowCreateGroup] = useState(false)
 
-  const loadGroups = async () => {
+  const createDefaultGroups = async (userId: string) => {
+    try {
+      for (const defaultGroup of defaultGroups) {
+        const groupId = `group_${userId}_${defaultGroup.name.toLowerCase().replace(/\s+/g, '_')}`
+        
+        // Check if group already exists
+        const existingGroups = await blink.db.guestGroups.list({
+          where: { 
+            userId: userId,
+            name: defaultGroup.name
+          }
+        })
+        
+        if (existingGroups.length === 0) {
+          await blink.db.guestGroups.create({
+            id: groupId,
+            eventId: 'default',
+            userId: userId,
+            name: defaultGroup.name,
+            description: defaultGroup.description,
+            color: defaultGroup.color
+          })
+        }
+      }
+    } catch (error) {
+      console.error('Error creating default groups:', error)
+    }
+  }
+
+  const loadGroups = useCallback(async () => {
     try {
       const user = await blink.auth.me()
+      
+      // Create default groups if they don't exist
+      await createDefaultGroups(user.id)
+      
       const groupsList = await blink.db.guestGroups.list({
         where: { userId: user.id },
         orderBy: { createdAt: 'desc' }
       })
-      setGroups(groupsList)
+      
+      // Mark default groups and add member counts
+      const groupsWithMetadata = groupsList.map(group => ({
+        ...group,
+        isDefault: defaultGroups.some(dg => dg.name === group.name),
+        memberCount: 0 // TODO: Calculate actual member count
+      }))
+      
+      // Sort groups to show default groups first
+      const sortedGroups = groupsWithMetadata.sort((a, b) => {
+        if (a.isDefault && !b.isDefault) return -1
+        if (!a.isDefault && b.isDefault) return 1
+        return 0
+      })
+      
+      setGroups(sortedGroups)
     } catch (error) {
       console.error('Error loading groups:', error)
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
   useEffect(() => {
     loadGroups()
-  }, [])
+  }, [loadGroups])
+
+  const getGroupIcon = (groupName: string) => {
+    const defaultGroup = defaultGroups.find(dg => dg.name === groupName)
+    return defaultGroup?.icon || Users
+  }
 
   if (loading) {
     return (
       <div className="p-6">
         <div className="animate-pulse">
           <div className="h-8 bg-gray-200 rounded w-1/4 mb-6"></div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[...Array(6)].map((_, i) => (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {[...Array(4)].map((_, i) => (
               <div key={i} className="bg-white p-6 rounded-xl border border-gray-200">
                 <div className="h-4 bg-gray-200 rounded w-2/3 mb-2"></div>
                 <div className="h-4 bg-gray-200 rounded w-1/2"></div>
@@ -51,6 +133,9 @@ export function Groups() {
       </div>
     )
   }
+
+  const defaultGroupsList = groups.filter(group => group.isDefault)
+  const customGroupsList = groups.filter(group => !group.isDefault)
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -69,54 +154,120 @@ export function Groups() {
         </button>
       </div>
 
-      {/* Groups Grid */}
-      {groups.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {groups.map((group) => (
-            <div key={group.id} className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-md transition-shadow">
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center">
-                  <div 
-                    className="w-4 h-4 rounded-full mr-3"
-                    style={{ backgroundColor: group.color }}
-                  ></div>
-                  <h3 className="text-lg font-semibold text-gray-900">{group.name}</h3>
-                </div>
-                <div className="flex space-x-1">
-                  <button className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors">
-                    <Edit className="w-4 h-4" />
-                  </button>
-                  <button className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors">
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-              
-              {group.description && (
-                <p className="text-gray-600 mb-4">{group.description}</p>
-              )}
-              
-              <div className="flex items-center text-sm text-gray-500">
-                <Users className="w-4 h-4 mr-1" />
-                0 members
-              </div>
-            </div>
-          ))}
+      {/* Default Groups Section */}
+      <div className="mb-8">
+        <div className="flex items-center space-x-2 mb-4">
+          <UserCheck className="w-5 h-5 text-primary" />
+          <h2 className="text-xl font-semibold text-gray-900">Default Groups</h2>
+          <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
+            Pre-built
+          </span>
         </div>
-      ) : (
-        <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
-          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Users className="w-8 h-8 text-gray-400" />
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {defaultGroupsList.map((group) => {
+            const IconComponent = getGroupIcon(group.name)
+            return (
+              <div 
+                key={group.id} 
+                className="bg-white rounded-xl border-2 p-6 hover:shadow-md transition-all duration-200"
+                style={{ borderColor: group.color + '20' }}
+              >
+                <div className="flex items-center justify-between mb-4">
+                  <div 
+                    className="w-12 h-12 rounded-full flex items-center justify-center"
+                    style={{ backgroundColor: group.color + '20' }}
+                  >
+                    <IconComponent className="w-6 h-6" style={{ color: group.color }} />
+                  </div>
+                  <div className="flex space-x-1">
+                    <button className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors">
+                      <Edit className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+                
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">{group.name}</h3>
+                <p className="text-sm text-gray-600 mb-4">{group.description}</p>
+                
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center text-sm text-gray-500">
+                    <Users className="w-4 h-4 mr-1" />
+                    {group.memberCount || 0} members
+                  </div>
+                  <button className="text-sm text-primary hover:text-primary/80 font-medium">
+                    Manage
+                  </button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Custom Groups Section */}
+      {customGroupsList.length > 0 && (
+        <div className="mb-8">
+          <div className="flex items-center space-x-2 mb-4">
+            <Plus className="w-5 h-5 text-primary" />
+            <h2 className="text-xl font-semibold text-gray-900">Custom Groups</h2>
           </div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">No groups yet</h3>
-          <p className="text-gray-600 mb-6">
-            Create groups to organize your guests for targeted messaging
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {customGroupsList.map((group) => (
+              <div key={group.id} className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-md transition-shadow">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center">
+                    <div 
+                      className="w-4 h-4 rounded-full mr-3"
+                      style={{ backgroundColor: group.color }}
+                    ></div>
+                    <h3 className="text-lg font-semibold text-gray-900">{group.name}</h3>
+                  </div>
+                  <div className="flex space-x-1">
+                    <button className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors">
+                      <Edit className="w-4 h-4" />
+                    </button>
+                    <button className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+                
+                {group.description && (
+                  <p className="text-gray-600 mb-4">{group.description}</p>
+                )}
+                
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center text-sm text-gray-500">
+                    <Users className="w-4 h-4 mr-1" />
+                    {group.memberCount || 0} members
+                  </div>
+                  <button className="text-sm text-primary hover:text-primary/80 font-medium">
+                    Manage
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Empty State for Custom Groups */}
+      {customGroupsList.length === 0 && defaultGroupsList.length > 0 && (
+        <div className="bg-gray-50 rounded-xl border-2 border-dashed border-gray-300 p-8 text-center">
+          <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Plus className="w-6 h-6 text-gray-400" />
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">Create Custom Groups</h3>
+          <p className="text-gray-600 mb-4">
+            Add custom groups like "College Friends", "Work Colleagues", or "Neighbors"
           </p>
           <button
             onClick={() => setShowCreateGroup(true)}
             className="bg-primary text-white px-6 py-3 rounded-lg font-medium hover:bg-primary/90 transition-colors"
           >
-            Create Your First Group
+            Create Custom Group
           </button>
         </div>
       )}
@@ -181,7 +332,8 @@ function CreateGroupModal({ onClose, onCreated }: CreateGroupModalProps) {
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-xl max-w-md w-full">
         <div className="p-6 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-900">Create Group</h2>
+          <h2 className="text-xl font-semibold text-gray-900">Create Custom Group</h2>
+          <p className="text-sm text-gray-600 mt-1">Add a new group to organize your guests</p>
         </div>
         
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
@@ -193,7 +345,7 @@ function CreateGroupModal({ onClose, onCreated }: CreateGroupModalProps) {
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g., Bridal Party, Family, Friends"
+              placeholder="e.g., College Friends, Work Colleagues"
               className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-transparent"
               required
             />
