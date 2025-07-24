@@ -14,6 +14,9 @@ import { GuestPortal } from './pages/GuestPortal'
 import { Vendors } from './pages/Vendors'
 import { Timeline } from './pages/Timeline'
 import { LoadingScreen } from './components/ui/LoadingScreen'
+import OnboardingFlow from './components/onboarding/OnboardingFlow'
+import { OnboardingProvider } from './contexts/OnboardingProvider'
+import { useOnboarding } from './hooks/useOnboarding'
 
 interface User {
   id: string
@@ -22,10 +25,11 @@ interface User {
   lastName?: string
 }
 
-function App() {
+const AppContent: React.FC = () => {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const { isOnboardingComplete, setOnboardingComplete } = useOnboarding()
 
   useEffect(() => {
     const unsubscribe = blink.auth.onAuthStateChanged((state) => {
@@ -34,6 +38,10 @@ function App() {
     })
     return unsubscribe
   }, [])
+
+  const handleOnboardingComplete = () => {
+    setOnboardingComplete(true)
+  }
 
   if (loading) {
     return <LoadingScreen />
@@ -56,6 +64,11 @@ function App() {
         </div>
       </div>
     )
+  }
+
+  // Show onboarding flow if not completed
+  if (!isOnboardingComplete) {
+    return <OnboardingFlow onComplete={handleOnboardingComplete} />
   }
 
   return (
@@ -89,6 +102,14 @@ function App() {
         <Toaster />
       </div>
     </Router>
+  )
+}
+
+function App() {
+  return (
+    <OnboardingProvider>
+      <AppContent />
+    </OnboardingProvider>
   )
 }
 
