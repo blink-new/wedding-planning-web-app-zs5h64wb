@@ -46,6 +46,33 @@ export function Groups() {
 
   const createDefaultGroups = async (userId: string) => {
     try {
+      // First, ensure we have a default event
+      let defaultEvent
+      try {
+        const existingEvents = await blink.db.events.list({
+          where: { userId: userId },
+          limit: 1
+        })
+        
+        if (existingEvents.length === 0) {
+          // Create a default event
+          defaultEvent = await blink.db.events.create({
+            id: `event_${userId}_default`,
+            userId: userId,
+            brideName: 'Bride',
+            groomName: 'Groom',
+            weddingDate: new Date().toISOString().split('T')[0],
+            venue: 'Wedding Venue'
+          })
+        } else {
+          defaultEvent = existingEvents[0]
+        }
+      } catch (error) {
+        console.error('Error with events:', error)
+        return
+      }
+
+      // Now create default groups
       for (const defaultGroup of defaultGroups) {
         const groupId = `group_${userId}_${defaultGroup.name.toLowerCase().replace(/\s+/g, '_')}`
         
@@ -60,7 +87,7 @@ export function Groups() {
         if (existingGroups.length === 0) {
           await blink.db.guestGroups.create({
             id: groupId,
-            eventId: 'default',
+            eventId: defaultEvent.id,
             userId: userId,
             name: defaultGroup.name,
             description: defaultGroup.description,
@@ -311,9 +338,20 @@ function CreateGroupModal({ onClose, onCreated }: CreateGroupModalProps) {
     try {
       const user = await blink.auth.me()
       
+      // Get the user's event
+      const existingEvents = await blink.db.events.list({
+        where: { userId: user.id },
+        limit: 1
+      })
+      
+      let eventId = 'default'
+      if (existingEvents.length > 0) {
+        eventId = existingEvents[0].id
+      }
+      
       await blink.db.guestGroups.create({
         id: `group_${Date.now()}`,
-        eventId: 'default',
+        eventId: eventId,
         userId: user.id,
         name: name.trim(),
         description: description.trim() || undefined,
